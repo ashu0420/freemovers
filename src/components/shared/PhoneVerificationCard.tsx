@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { useFeatureFlag } from '@/components/providers/FeatureFlagsProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -26,6 +27,7 @@ export function PhoneVerificationCard({
   className,
 }: PhoneVerificationCardProps) {
   const { t } = useI18n();
+  const otpEnabled = useFeatureFlag('otp');
   const [isSending, setIsSending] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [code, setCode] = useState('');
@@ -53,6 +55,18 @@ export function PhoneVerificationCard({
     onVerifiedChange?.(isVerified);
   }, [isVerified, onVerifiedChange]);
 
+  // When phone OTP is disabled by an admin, treat the phone as verified so the
+  // flow that depends on verification (e.g. signup) is not blocked.
+  useEffect(() => {
+    if (!otpEnabled) {
+      onVerifiedChange?.(true);
+    }
+  }, [otpEnabled, onVerifiedChange]);
+
+  if (!otpEnabled) {
+    return null;
+  }
+
   const sendCode = async () => {
     if (!normalizedPhone || needsSaveFirst) return;
     try {
@@ -68,7 +82,12 @@ export function PhoneVerificationCard({
         return;
       }
       setCodeSent(true);
-      toast.success(t('phoneVerify.codeSent'));
+      if (data?.dev_code) {
+        setCode(String(data.dev_code));
+        toast.success(`${t('phoneVerify.codeSent')} (dev code: ${data.dev_code})`);
+      } else {
+        toast.success(t('phoneVerify.codeSent'));
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : t('common.networkError');
       toast.error(message);
@@ -146,6 +165,7 @@ export function PhoneVerificationCard({
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
                 placeholder={t('phoneVerify.codePlaceholder')}
+                aria-label={t('phoneVerify.codeLabel')}
                 className="h-9"
               />
               <Button
