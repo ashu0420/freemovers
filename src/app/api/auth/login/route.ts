@@ -1,6 +1,6 @@
-import { jsonResponse, readJson } from '@/lib/server/http';
+import { jsonResponse, readJson, signSession, setSessionCookie } from '@/lib/server/http';
+import { NextResponse } from 'next/server';
 import { findUserByCredentials, UserType } from '@/lib/server/db';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -23,14 +23,10 @@ export async function POST(request: Request) {
     return jsonResponse({ detail: 'Invalid credentials.' }, 401);
   }
 
-  const tokens = {
-    access: randomUUID(),
-    refresh: randomUUID(),
-  };
+  const role = user.user_type ?? 'customer';
+  const token = await signSession({ userId: user.id, role });
 
-  return jsonResponse({
-    access: tokens.access,
-    refresh: tokens.refresh,
+  const res = NextResponse.json({
     user: {
       id: user.id,
       email: user.email,
@@ -44,4 +40,6 @@ export async function POST(request: Request) {
       line_user_id: user.line_user_id,
     },
   });
+  setSessionCookie(res, token);
+  return res;
 }

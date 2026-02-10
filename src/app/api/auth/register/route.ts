@@ -1,6 +1,6 @@
-import { jsonResponse, readJson } from '@/lib/server/http';
+import { jsonResponse, readJson, signSession, setSessionCookie } from '@/lib/server/http';
+import { NextResponse } from 'next/server';
 import { createUser, findUserByEmail, UserType } from '@/lib/server/db';
-import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
@@ -34,12 +34,17 @@ export async function POST(request: Request) {
     return jsonResponse({ detail: 'Passwords do not match.' }, 400);
   }
 
+  // Admin accounts are provisioned via server-side seeding only, never self-service.
+  if (body.user_type !== 'customer' && body.user_type !== 'driver') {
+    return jsonResponse({ detail: 'Invalid account type.' }, 400);
+  }
+
   const existing = findUserByEmail(body.email);
   if (existing) {
     return jsonResponse({ detail: 'Email already registered.' }, 409);
   }
 
-  const user = createUser({
+  const user = await createUser({
     email: body.email,
     password: body.password,
     first_name: body.first_name,
@@ -53,14 +58,10 @@ export async function POST(request: Request) {
     operating_regions_json: body.user_type === 'driver' ? JSON.stringify(['tokyo']) : JSON.stringify([]),
   });
 
-  const tokens = {
-    access: randomUUID(),
-    refresh: randomUUID(),
-  };
+  const role = user.user_type ?? 'customer';
+  const token = await signSession({ userId: user.id, role });
 
-  return jsonResponse({
-    access: tokens.access,
-    refresh: tokens.refresh,
+  const res = NextResponse.json({
     user: {
       id: user.id,
       email: user.email,
@@ -74,4 +75,6 @@ export async function POST(request: Request) {
       line_user_id: user.line_user_id,
     },
   });
+  setSessionCookie(res, token);
+  return res;
 }
