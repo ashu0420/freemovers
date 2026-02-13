@@ -14,11 +14,11 @@ export function buildGuestEmail(phone: string) {
   return `guest+${normalized || randomUUID().slice(0, 8)}@freemovers.local`;
 }
 
-export function getOrCreateGuestCustomer(params: {
+export async function getOrCreateGuestCustomer(params: {
   firstName?: string;
   lastName?: string;
   phoneNumber: string;
-}): UserRecord {
+}): Promise<UserRecord> {
   const normalizedPhone = normalizePhone(params.phoneNumber);
   const email = buildGuestEmail(normalizedPhone);
   const existing = findUserByEmail(email);

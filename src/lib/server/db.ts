@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-export type UserType = 'customer' | 'driver';
+export type UserType = 'customer' | 'driver' | 'admin';
 
 export type UserRecord = {
   id: number;
@@ -21,6 +21,54 @@ export type UserRecord = {
 };
 
 export type MoveItem = { name: string; quantity: number };
+
+export type MoveRow = {
+  id: number;
+  customer_id: number;
+  driver_id: number | null;
+  pickup_address: string;
+  pickup_postal_code: string | null;
+  dropoff_address: string;
+  dropoff_postal_code: string | null;
+  move_date: string;
+  country_code: string;
+  service_area: string;
+  payment_preference: string;
+  items_json: string;
+  estimated_earnings: number;
+  status: MoveRecord['status'];
+  created_at: string;
+};
+
+function parseMoveItems(itemsJson: string | null | undefined): MoveItem[] {
+  if (!itemsJson) return [];
+  try {
+    const parsed = JSON.parse(itemsJson) as unknown;
+    return Array.isArray(parsed) ? (parsed as MoveItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapMoveRow(row: MoveRow): MoveRecord {
+  return {
+    id: row.id,
+    customer_id: row.customer_id,
+    driver_id: row.driver_id,
+    pickup_address: row.pickup_address,
+    pickup_postal_code: row.pickup_postal_code,
+    dropoff_address: row.dropoff_address,
+    dropoff_postal_code: row.dropoff_postal_code,
+    move_date: row.move_date,
+    country_code: row.country_code,
+    service_area: row.service_area,
+    payment_preference: row.payment_preference,
+    items: parseMoveItems(row.items_json),
+    estimated_earnings: row.estimated_earnings ?? 0,
+    status: row.status,
+    created_at: row.created_at,
+  };
+}
 
 export type MoveRecord = {
   id: number;
@@ -113,6 +161,32 @@ function getDb() {
       FOREIGN KEY (driver_id) REFERENCES users(id),
       FOREIGN KEY (move_id) REFERENCES moves(id)
     );
+
+    CREATE TABLE IF NOT EXISTS phone_otps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone_number TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_phone_otps_phone ON phone_otps(phone_number);
+
+    CREATE INDEX IF NOT EXISTS idx_moves_customer_id ON moves(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_moves_driver_status ON moves(driver_id, status);
+    CREATE INDEX IF NOT EXISTS idx_moves_status ON moves(status);
+    CREATE INDEX IF NOT EXISTS idx_quotes_move_id ON quotes(move_id);
+    CREATE INDEX IF NOT EXISTS idx_quotes_driver_id ON quotes(driver_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_driver_id ON notifications(driver_id);
+    CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
+
+    CREATE TABLE IF NOT EXISTS feature_flags (
+      key TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   const columns = db
@@ -161,12 +235,40 @@ function getDb() {
     db.exec(`ALTER TABLE users ADD COLUMN operating_regions_json TEXT NOT NULL DEFAULT '[]'`);
   }
 
+  seedAdminUser(db);
+
   return db;
 }
 
-export function createUser(user: Omit<UserRecord, 'id'>): UserRecord {
+function seedAdminUser(database: ReturnType<typeof Database>) {
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) return;
+
+  const existing = database
+    .prepare(`SELECT id FROM users WHERE email = ? LIMIT 1`)
+    .get(email) as { id: number } | undefined;
+  if (existing) return;
+
+  // Hash synchronously here so getDb() can stay synchronous (hashPassword is async).
+  const salt = crypto.randomBytes(PASSWORD_SALT_BYTES);
+  const derived = crypto.pbkdf2Sync(password, salt, PASSWORD_ITERATIONS, PASSWORD_KEY_BYTES, 'sha256');
+  const hashedPassword = `${PASSWORD_ITERATIONS}:${salt.toString('hex')}:${derived.toString('hex')}`;
+  database
+    .prepare(
+      `INSERT INTO users (
+        email, password, first_name, last_name, user_type, phone_number,
+        phone_verified, preferred_locale, preferred_notification_channel,
+        line_user_id, operating_regions_json
+      ) VALUES (?, ?, 'Admin', 'User', 'admin', '', 0, 'en', 'line', NULL, '[]')`
+    )
+    .run(email, hashedPassword);
+  console.log(`[seed] admin user created: ${email}`);
+}
+
+export async function createUser(user: Omit<UserRecord, 'id'>): Promise<UserRecord> {
   const database = getDb();
-  const hashedPassword = hashPassword(user.password);
+  const hashedPassword = await hashPassword(user.password);
   const stmt = database.prepare(`
     INSERT INTO users (
       email,
@@ -393,41 +495,9 @@ export function listMovesByCustomer(customerId: number): MoveRecord[] {
     .prepare(
       `SELECT * FROM moves WHERE customer_id = ? ORDER BY created_at DESC`
     )
-    .all(customerId) as {
-    id: number;
-    customer_id: number;
-    driver_id: number | null;
-    pickup_address: string;
-    pickup_postal_code: string | null;
-    dropoff_address: string;
-    dropoff_postal_code: string | null;
-    move_date: string;
-    country_code: string;
-    service_area: string;
-    payment_preference: string;
-    items_json: string;
-    estimated_earnings: number;
-    status: MoveRecord['status'];
-    created_at: string;
-  }[];
+    .all(customerId) as MoveRow[];
 
-  return rows.map((row) => ({
-    id: row.id,
-    customer_id: row.customer_id,
-    driver_id: row.driver_id,
-    pickup_address: row.pickup_address,
-    pickup_postal_code: row.pickup_postal_code,
-    dropoff_address: row.dropoff_address,
-    dropoff_postal_code: row.dropoff_postal_code,
-    move_date: row.move_date,
-    country_code: row.country_code,
-    service_area: row.service_area,
-    payment_preference: row.payment_preference,
-    items: JSON.parse(row.items_json) as MoveItem[],
-    estimated_earnings: row.estimated_earnings ?? 0,
-    status: row.status,
-    created_at: row.created_at,
-  }));
+  return rows.map(mapMoveRow);
 }
 
 export function countUpcomingMoves(customerId: number) {
@@ -460,41 +530,9 @@ export function listAvailableMoves(serviceAreas?: string[]): MoveRecord[] {
       : `SELECT * FROM moves WHERE driver_id IS NULL AND status = 'pending' ORDER BY created_at DESC`;
   const rows = database
     .prepare(query)
-    .all(...(serviceAreas ?? [])) as {
-    id: number;
-    customer_id: number;
-    driver_id: number | null;
-    pickup_address: string;
-    pickup_postal_code: string | null;
-    dropoff_address: string;
-    dropoff_postal_code: string | null;
-    move_date: string;
-    country_code: string;
-    service_area: string;
-    payment_preference: string;
-    items_json: string;
-    estimated_earnings: number;
-    status: MoveRecord['status'];
-    created_at: string;
-  }[];
+    .all(...(serviceAreas ?? [])) as MoveRow[];
 
-  return rows.map((row) => ({
-    id: row.id,
-    customer_id: row.customer_id,
-    driver_id: row.driver_id,
-    pickup_address: row.pickup_address,
-    pickup_postal_code: row.pickup_postal_code,
-    dropoff_address: row.dropoff_address,
-    dropoff_postal_code: row.dropoff_postal_code,
-    move_date: row.move_date,
-    country_code: row.country_code,
-    service_area: row.service_area,
-    payment_preference: row.payment_preference,
-    items: JSON.parse(row.items_json) as MoveItem[],
-    estimated_earnings: row.estimated_earnings ?? 0,
-    status: row.status,
-    created_at: row.created_at,
-  }));
+  return rows.map(mapMoveRow);
 }
 
 export function listMovesForDriver(driverId: number): MoveRecord[] {
@@ -503,41 +541,9 @@ export function listMovesForDriver(driverId: number): MoveRecord[] {
     .prepare(
       `SELECT * FROM moves WHERE driver_id = ? AND status IN ('pending','scheduled','in_progress') ORDER BY move_date ASC`
     )
-    .all(driverId) as {
-    id: number;
-    customer_id: number;
-    driver_id: number | null;
-    pickup_address: string;
-    pickup_postal_code: string | null;
-    dropoff_address: string;
-    dropoff_postal_code: string | null;
-    move_date: string;
-    country_code: string;
-    service_area: string;
-    payment_preference: string;
-    items_json: string;
-    estimated_earnings: number;
-    status: MoveRecord['status'];
-    created_at: string;
-  }[];
+    .all(driverId) as MoveRow[];
 
-  return rows.map((row) => ({
-    id: row.id,
-    customer_id: row.customer_id,
-    driver_id: row.driver_id,
-    pickup_address: row.pickup_address,
-    pickup_postal_code: row.pickup_postal_code,
-    dropoff_address: row.dropoff_address,
-    dropoff_postal_code: row.dropoff_postal_code,
-    move_date: row.move_date,
-    country_code: row.country_code,
-    service_area: row.service_area,
-    payment_preference: row.payment_preference,
-    items: JSON.parse(row.items_json) as MoveItem[],
-    estimated_earnings: row.estimated_earnings ?? 0,
-    status: row.status,
-    created_at: row.created_at,
-  }));
+  return rows.map(mapMoveRow);
 }
 
 export function listRecentMovesForDriver(driverId: number): MoveRecord[] {
@@ -546,41 +552,9 @@ export function listRecentMovesForDriver(driverId: number): MoveRecord[] {
     .prepare(
       `SELECT * FROM moves WHERE driver_id = ? AND status = 'completed' ORDER BY created_at DESC`
     )
-    .all(driverId) as {
-    id: number;
-    customer_id: number;
-    driver_id: number | null;
-    pickup_address: string;
-    pickup_postal_code: string | null;
-    dropoff_address: string;
-    dropoff_postal_code: string | null;
-    move_date: string;
-    country_code: string;
-    service_area: string;
-    payment_preference: string;
-    items_json: string;
-    estimated_earnings: number;
-    status: MoveRecord['status'];
-    created_at: string;
-  }[];
+    .all(driverId) as MoveRow[];
 
-  return rows.map((row) => ({
-    id: row.id,
-    customer_id: row.customer_id,
-    driver_id: row.driver_id,
-    pickup_address: row.pickup_address,
-    pickup_postal_code: row.pickup_postal_code,
-    dropoff_address: row.dropoff_address,
-    dropoff_postal_code: row.dropoff_postal_code,
-    move_date: row.move_date,
-    country_code: row.country_code,
-    service_area: row.service_area,
-    payment_preference: row.payment_preference,
-    items: JSON.parse(row.items_json) as MoveItem[],
-    estimated_earnings: row.estimated_earnings ?? 0,
-    status: row.status,
-    created_at: row.created_at,
-  }));
+  return rows.map(mapMoveRow);
 }
 
 export function assignMoveToDriver(moveId: number, driverId: number, quotedRate: number) {
@@ -593,11 +567,39 @@ export function assignMoveToDriver(moveId: number, driverId: number, quotedRate:
   return result.changes > 0;
 }
 
-export function updateMoveStatus(moveId: number, status: MoveRecord['status']) {
+// Allowed legal state transitions. A move may not transition out of a terminal
+// state ('completed' or 'cancelled'), and may only move along defined edges.
+const MOVE_STATUS_TRANSITIONS: Record<MoveRecord['status'], MoveRecord['status'][]> = {
+  pending: ['scheduled', 'cancelled'],
+  scheduled: ['in_progress', 'cancelled'],
+  in_progress: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+export function updateMoveStatus(
+  moveId: number,
+  status: MoveRecord['status'],
+  driverId?: number
+) {
   const database = getDb();
+
+  const current = database
+    .prepare(`SELECT driver_id, status FROM moves WHERE id = ?`)
+    .get(moveId) as { driver_id: number | null; status: MoveRecord['status'] } | undefined;
+  if (!current) return false;
+
+  // Block transitions from terminal states and any undefined transition.
+  const allowed = MOVE_STATUS_TRANSITIONS[current.status] ?? [];
+  if (!allowed.includes(status)) return false;
+
   const result = database
-    .prepare(`UPDATE moves SET status = ? WHERE id = ?`)
-    .run(status, moveId);
+    .prepare(
+      `UPDATE moves SET status = ? WHERE id = ?${
+        driverId !== undefined ? ' AND driver_id = ?' : ''
+      }`
+    )
+    .run(status, moveId, ...(driverId !== undefined ? [driverId] : []));
   return result.changes > 0;
 }
 
@@ -646,7 +648,7 @@ export function acceptQuote(moveId: number, driverId: number) {
 
   const result = database
     .prepare(
-      `UPDATE moves SET driver_id = ?, estimated_earnings = ?, status = 'scheduled' WHERE id = ?`
+      `UPDATE moves SET driver_id = ?, estimated_earnings = ?, status = 'scheduled' WHERE id = ? AND driver_id IS NULL AND status = 'pending'`
     )
     .run(driverId, quote.quoted_rate, moveId);
   return result.changes > 0;
@@ -691,46 +693,72 @@ export function listNotificationsForDriver(driverId: number) {
   }[];
 }
 
+export type PhoneOtpRecord = {
+  id: number;
+  phone_number: string;
+  code_hash: string;
+  expires_at: string;
+  attempts: number;
+  consumed_at: string | null;
+  created_at: string;
+};
+
+export function createPhoneOtp(params: {
+  phone: string;
+  codeHash: string;
+  expiresAt: string;
+}) {
+  const database = getDb();
+  // Invalidate any prior un-consumed codes for this phone so only the newest is valid.
+  database
+    .prepare(`DELETE FROM phone_otps WHERE phone_number = ? AND consumed_at IS NULL`)
+    .run(params.phone);
+  const result = database
+    .prepare(
+      `INSERT INTO phone_otps (phone_number, code_hash, expires_at, attempts, created_at)
+       VALUES (@phone_number, @code_hash, @expires_at, 0, @created_at)`
+    )
+    .run({
+      phone_number: params.phone,
+      code_hash: params.codeHash,
+      expires_at: params.expiresAt,
+      created_at: new Date().toISOString(),
+    });
+  return Number(result.lastInsertRowid);
+}
+
+export function getActivePhoneOtp(phone: string): PhoneOtpRecord | undefined {
+  const database = getDb();
+  return database
+    .prepare(
+      `SELECT * FROM phone_otps
+       WHERE phone_number = ? AND consumed_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`
+    )
+    .get(phone) as PhoneOtpRecord | undefined;
+}
+
+export function incrementPhoneOtpAttempts(id: number) {
+  const database = getDb();
+  database.prepare(`UPDATE phone_otps SET attempts = attempts + 1 WHERE id = ?`).run(id);
+}
+
+export function consumePhoneOtp(id: number) {
+  const database = getDb();
+  database
+    .prepare(`UPDATE phone_otps SET consumed_at = ? WHERE id = ?`)
+    .run(new Date().toISOString(), id);
+}
+
 export function getMoveById(moveId: number): MoveRecord | undefined {
   const database = getDb();
   const row = database
     .prepare(`SELECT * FROM moves WHERE id = ?`)
-    .get(moveId) as {
-    id: number;
-    customer_id: number;
-    driver_id: number | null;
-    pickup_address: string;
-    pickup_postal_code: string | null;
-    dropoff_address: string;
-    dropoff_postal_code: string | null;
-    move_date: string;
-    country_code: string;
-    service_area: string;
-    payment_preference: string;
-    items_json: string;
-    estimated_earnings: number;
-    status: MoveRecord['status'];
-    created_at: string;
-  } | undefined;
+    .get(moveId) as MoveRow | undefined;
 
   if (!row) return undefined;
-  return {
-    id: row.id,
-    customer_id: row.customer_id,
-    driver_id: row.driver_id,
-    pickup_address: row.pickup_address,
-    pickup_postal_code: row.pickup_postal_code,
-    dropoff_address: row.dropoff_address,
-    dropoff_postal_code: row.dropoff_postal_code,
-    move_date: row.move_date,
-    country_code: row.country_code,
-    service_area: row.service_area,
-    payment_preference: row.payment_preference,
-    items: JSON.parse(row.items_json) as MoveItem[],
-    estimated_earnings: row.estimated_earnings ?? 0,
-    status: row.status,
-    created_at: row.created_at,
-  };
+  return mapMoveRow(row);
 }
 
 export function driverStats(driverId: number) {
@@ -759,18 +787,57 @@ export function driverStats(driverId: number) {
   };
 }
 
-function hashPassword(password: string) {
-  const salt = crypto.randomBytes(PASSWORD_SALT_BYTES);
-  const derived = crypto.pbkdf2Sync(password, salt, PASSWORD_ITERATIONS, PASSWORD_KEY_BYTES, 'sha256');
-  return `${PASSWORD_ITERATIONS}:${salt.toString('hex')}:${derived.toString('hex')}`;
+export function getFeatureFlagOverrides(): { key: string; enabled: boolean }[] {
+  const database = getDb();
+  const rows = database
+    .prepare(`SELECT key, enabled FROM feature_flags`)
+    .all() as { key: string; enabled: number }[];
+  return rows.map((row) => ({ key: row.key, enabled: row.enabled === 1 }));
 }
 
-function verifyPassword(password: string, stored: string) {
+export function setFeatureFlagOverride(key: string, enabled: boolean) {
+  const database = getDb();
+  database
+    .prepare(
+      `INSERT INTO feature_flags (key, enabled, updated_at)
+       VALUES (@key, @enabled, @updated_at)
+       ON CONFLICT(key) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at`
+    )
+    .run({ key, enabled: enabled ? 1 : 0, updated_at: new Date().toISOString() });
+}
+
+function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(PASSWORD_SALT_BYTES);
+  return new Promise((resolve, reject) => {
+    crypto.pbkdf2(
+      password,
+      salt,
+      PASSWORD_ITERATIONS,
+      PASSWORD_KEY_BYTES,
+      'sha256',
+      (err, derived) => {
+        if (err) return reject(err);
+        resolve(`${PASSWORD_ITERATIONS}:${salt.toString('hex')}:${derived.toString('hex')}`);
+      }
+    );
+  });
+}
+
+function verifyPassword(password: string, stored: string): boolean {
   const [iterText, saltHex, hashHex] = stored.split(':');
   if (!iterText || !saltHex || !hashHex) return false;
   const iterations = Number(iterText);
   if (!Number.isFinite(iterations)) return false;
-  const salt = Buffer.from(saltHex, 'hex');
+  let salt: Buffer;
+  let expected: Buffer;
+  try {
+    salt = Buffer.from(saltHex, 'hex');
+    expected = Buffer.from(hashHex, 'hex');
+  } catch {
+    return false;
+  }
+  if (salt.length === 0 || expected.length === 0) return false;
   const derived = crypto.pbkdf2Sync(password, salt, iterations, PASSWORD_KEY_BYTES, 'sha256');
-  return crypto.timingSafeEqual(Buffer.from(hashHex, 'hex'), derived);
+  if (derived.length !== expected.length) return false;
+  return crypto.timingSafeEqual(expected, derived);
 }
