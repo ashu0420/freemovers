@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar, MapPin, DollarSign, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { formatJPY } from '@/lib/utils';
 
 type Job = {
   id: string;
@@ -32,6 +33,7 @@ export default function AvailableJobsPage() {
   const { t } = useI18n();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isFetching, setIsFetching] = useState(true);
+  const [error, setError] = useState(false);
   const [quotes, setQuotes] = useState<Record<string, string>>({});
   const [sentQuotes, setSentQuotes] = useState<Record<string, boolean>>({});
 
@@ -45,6 +47,9 @@ export default function AvailableJobsPage() {
       try {
         setIsFetching(true);
         const response = await fetch(`/api/driver/jobs/available?driver_id=${user?.id ?? ''}`);
+        if (!response.ok) {
+          throw new Error('fetch failed');
+        }
         const data = await response.json();
         const loadedJobs = Array.isArray(data?.jobs) ? data.jobs : [];
         setJobs(loadedJobs);
@@ -52,7 +57,7 @@ export default function AvailableJobsPage() {
           Object.fromEntries(
             loadedJobs
               .filter((job: Job) => Number.isFinite(job.myQuote))
-              .map((job: Job) => [job.id, Number(job.myQuote).toFixed(2)])
+              .map((job: Job) => [job.id, String(Number(job.myQuote))])
           )
         );
         setSentQuotes(
@@ -62,8 +67,10 @@ export default function AvailableJobsPage() {
               .map((job: Job) => [job.id, true])
           )
         );
+        setError(false);
       } catch {
         setJobs([]);
+        setError(true);
       } finally {
         setIsFetching(false);
       }
@@ -108,6 +115,19 @@ export default function AvailableJobsPage() {
       </div>
 
       {isFetching ? (
+        <div className="text-sm text-muted-foreground">{t('driver.available.loading')}</div>
+      ) : error ? (
+        <Card className="border border-dashed">
+          <CardHeader>
+            <CardTitle>{t('common.networkError')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              {t('common.retry')}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : jobs.length === 0 ? (
         <div className="text-sm text-muted-foreground">{t('driver.available.loading')}</div>
       ) : jobs.length === 0 ? (
         <Card className="border border-dashed">
@@ -154,7 +174,7 @@ export default function AvailableJobsPage() {
                   )}
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-orange-500" />
-                    <span>${job.estimatedEarnings.toFixed(2)}</span>
+                    <span>{formatJPY(job.estimatedEarnings)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-orange-500" />
@@ -173,27 +193,27 @@ export default function AvailableJobsPage() {
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor={`quote-${job.id}`} className="text-sm font-medium text-gray-700">
                       {t('driver.available.quote')}
                     </label>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500">$</span>
                       <input
+                        id={`quote-${job.id}`}
                         className="h-10 w-32 rounded-md border border-orange-100 bg-orange-50/40 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                        placeholder="0.00"
+                        placeholder="0"
                         value={quotes[job.id] ?? ''}
                         onChange={(event) =>
                           setQuotes((prev) => ({ ...prev, [job.id]: event.target.value }))
                         }
                         type="number"
                         min={0}
-                        step="0.01"
+                        step="1"
                       />
                     </div>
                     {Number.isFinite(job.myQuote) && (
                       <p className="text-xs text-gray-500">
                         {t('driver.available.lastQuote', {
-                          amount: Number(job.myQuote).toFixed(2),
+                          amount: formatJPY(Number(job.myQuote)),
                         })}
                       </p>
                     )}

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, DollarSign, MapPin, Loader2, CheckCircle, Star, Briefcase, Compass } from 'lucide-react';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { formatJPY } from '@/lib/utils';
 
 type JobStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
 
@@ -26,10 +27,11 @@ interface Job {
 export default function DriverDashboard() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [isLoading, setIsLoading] = useState(true);
   const [upcomingJobs, setUpcomingJobs] = useState<Job[]>([]);
   const [recentActivity, setRecentActivity] = useState<Job[]>([]);
+  const [error, setError] = useState(false);
   const [stats, setStats] = useState({
     totalEarnings: 0,
     jobsCompleted: 0,
@@ -57,6 +59,10 @@ export default function DriverDashboard() {
           fetch(`/api/driver/stats?driver_id=${user?.id}`),
         ]);
 
+        if (!jobsRes.ok || !recentRes.ok || !statsRes.ok) {
+          throw new Error('fetch failed');
+        }
+
         const jobsData = await jobsRes.json();
         const recentData = await recentRes.json();
         const statsData = await statsRes.json();
@@ -69,6 +75,7 @@ export default function DriverDashboard() {
           rating: statsData?.rating ?? 0,
           activeJobs: statsData?.activeJobs ?? 0,
         });
+        setError(false);
       } catch {
         setUpcomingJobs([]);
         setRecentActivity([]);
@@ -78,6 +85,7 @@ export default function DriverDashboard() {
           rating: 0,
           activeJobs: 0,
         });
+        setError(true);
       } finally {
         setIsLoading(false);
       }
@@ -87,7 +95,7 @@ export default function DriverDashboard() {
   }, [user, isAuthLoading, router]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -124,6 +132,17 @@ export default function DriverDashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <p className="text-sm text-muted-foreground">{t('common.networkError')}</p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          {t('common.retry')}
+        </Button>
       </div>
     );
   }
@@ -169,7 +188,7 @@ export default function DriverDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats.totalEarnings.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatJPY(stats.totalEarnings)}</div>
             <p className="text-xs text-muted-foreground">{t('driver.dashboard.totalEarningsHint')}</p>
           </CardContent>
         </Card>
@@ -241,14 +260,14 @@ export default function DriverDashboard() {
                     </div>
                     <div className="mt-4 flex justify-between items-center">
                       <span className="text-lg font-bold text-green-600">
-                        ${job.estimatedEarnings.toFixed(2)}
+                        {formatJPY(job.estimatedEarnings)}
                       </span>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => router.push(`/driver/jobs/${job.id}`)}
                       >
-                        View Details
+                        {t('driver.jobs.viewDetails')}
                       </Button>
                     </div>
                   </div>
@@ -288,7 +307,7 @@ export default function DriverDashboard() {
                         <p className="text-sm text-muted-foreground">{formatDate(job.scheduledDate)}</p>
                       </div>
                     </div>
-                    <span className="font-medium text-green-600">+${job.estimatedEarnings.toFixed(2)}</span>
+                    <span className="font-medium text-green-600">+{formatJPY(job.estimatedEarnings)}</span>
                   </li>
                 ))}
               </ul>

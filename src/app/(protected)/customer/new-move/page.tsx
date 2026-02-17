@@ -103,6 +103,12 @@ export default function NewMovePage() {
 
   const currentStep = steps.find((s) => s.id === step);
 
+  const stepLabels = [
+    { id: 1, label: t('move.stepDetails') },
+    { id: 2, label: t('move.stepItems') },
+    { id: 3, label: t('move.stepConfirm') },
+  ];
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -111,6 +117,48 @@ export default function NewMovePage() {
           <p className="text-muted-foreground">{t('newMove.subtitle')}</p>
         </div>
       </div>
+
+      <div className="w-full max-w-3xl mx-auto" aria-label="progress">
+        <ol className="flex items-center">
+          {stepLabels.map((s, index) => {
+            const isActive = s.id === step;
+            const isDone = s.id < step;
+            return (
+              <li key={s.id} className="flex flex-1 items-center">
+                <div className="flex flex-col items-center gap-1">
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+                      isActive
+                        ? 'bg-orange-500 text-white'
+                        : isDone
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
+                    aria-current={isActive ? 'step' : undefined}
+                  >
+                    {s.id}
+                  </div>
+                  <span
+                    className={`text-xs ${
+                      isActive ? 'font-medium text-orange-700' : 'text-gray-500'
+                    }`}
+                  >
+                    {t('move.progress')} {s.id}/{stepLabels.length} {s.label}
+                  </span>
+                </div>
+                {index < stepLabels.length - 1 && (
+                  <div
+                    className={`mx-2 h-0.5 flex-1 ${
+                      isDone ? 'bg-orange-400' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
       <Card className="w-full max-w-3xl mx-auto">
         <CardHeader>
           <CardTitle>

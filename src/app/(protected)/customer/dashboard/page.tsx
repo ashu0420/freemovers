@@ -10,12 +10,15 @@ import { Input } from '@/components/ui/input';
 import { LocationInput } from '@/components/ui/LocationInput';
 import { useI18n } from '@/components/providers/I18nProvider';
 import { JP_LAUNCH_REGIONS, PAYMENT_OPTIONS, normalizePostalCode } from '@/lib/japan';
+import { formatJPY } from '@/lib/utils';
+import { MoversCoinTeaser } from '@/components/shared/MoversCoinTeaser';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(true);
+  const [error, setError] = useState(false);
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [recentMoves, setRecentMoves] = useState<
     { id: number; status: string; from: string; to: string; scheduledDate: string }[]
@@ -38,9 +41,11 @@ export default function CustomerDashboard() {
 
         setRecentMoves(Array.isArray(movesData?.moves) ? movesData.moves : []);
         setUpcomingCount(Number.isFinite(upcomingData?.upcoming) ? upcomingData.upcoming : 0);
+        setError(false);
       } catch {
         setRecentMoves([]);
         setUpcomingCount(0);
+        setError(true);
       }
     };
 
@@ -247,6 +252,14 @@ export default function CustomerDashboard() {
 
   return (
     <div className="space-y-10">
+      {error && (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-orange-200 bg-orange-50/40 p-6">
+          <p className="text-sm text-muted-foreground">{t('common.networkError')}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )}
       <section className="relative overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-100 px-6 py-10 shadow-sm">
         <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-orange-200/60 blur-2xl" />
         <div className="absolute -bottom-10 left-10 h-44 w-44 rounded-full bg-amber-300/40 blur-3xl" />
@@ -334,11 +347,12 @@ export default function CustomerDashboard() {
               <form className="space-y-6 pt-2 overflow-auto pr-2" onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-pickupPostal" className="text-sm font-medium text-gray-700">
                       {t('customer.form.pickupPostal')}
                     </label>
                     <div className="flex gap-2">
                       <Input
+                        id="cd-pickupPostal"
                         value={formData.pickupPostalCode}
                         onChange={(event) =>
                           setFormData((prev) => ({
@@ -359,11 +373,12 @@ export default function CustomerDashboard() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-dropoffPostal" className="text-sm font-medium text-gray-700">
                       {t('customer.form.dropoffPostal')}
                     </label>
                     <div className="flex gap-2">
                       <Input
+                        id="cd-dropoffPostal"
                         value={formData.dropoffPostalCode}
                         onChange={(event) =>
                           setFormData((prev) => ({
@@ -386,10 +401,11 @@ export default function CustomerDashboard() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-pickup" className="text-sm font-medium text-gray-700">
                       {t('customer.form.pickup')}
                     </label>
                     <LocationInput
+                      id="cd-pickup"
                       value={formData.pickupAddress}
                       onChange={(value) =>
                         setFormData((prev) => ({ ...prev, pickupAddress: value }))
@@ -399,10 +415,11 @@ export default function CustomerDashboard() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-dropoff" className="text-sm font-medium text-gray-700">
                       {t('customer.form.dropoff')}
                     </label>
                     <LocationInput
+                      id="cd-dropoff"
                       value={formData.dropoffAddress}
                       onChange={(value) =>
                         setFormData((prev) => ({ ...prev, dropoffAddress: value }))
@@ -414,10 +431,11 @@ export default function CustomerDashboard() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-moveDate" className="text-sm font-medium text-gray-700">
                       {t('customer.form.date')}
                     </label>
                     <Input
+                      id="cd-moveDate"
                       type="date"
                       value={formData.moveDate}
                       onChange={(event) =>
@@ -427,10 +445,11 @@ export default function CustomerDashboard() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-serviceArea" className="text-sm font-medium text-gray-700">
                       {t('customer.form.serviceArea')}
                     </label>
                     <select
+                      id="cd-serviceArea"
                       value={formData.serviceArea}
                       onChange={(event) =>
                         setFormData((prev) => ({ ...prev, serviceArea: event.target.value }))
@@ -447,10 +466,11 @@ export default function CustomerDashboard() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label htmlFor="cd-paymentPreference" className="text-sm font-medium text-gray-700">
                       {t('customer.form.paymentPreference')}
                     </label>
                     <select
+                      id="cd-paymentPreference"
                       value={formData.paymentPreference}
                       onChange={(event) =>
                         setFormData((prev) => ({ ...prev, paymentPreference: event.target.value }))
@@ -479,10 +499,11 @@ export default function CustomerDashboard() {
                   {items.map((item, index) => (
                     <div key={index} className="grid gap-3 md:grid-cols-6 items-end">
                       <div className="md:col-span-4 space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
+                        <label htmlFor={`cd-itemName-${index}`} className="text-sm font-medium text-gray-700">
                           {t('customer.form.itemName')}
                         </label>
                         <Input
+                          id={`cd-itemName-${index}`}
                           value={item.name}
                           onChange={(event) => handleItemChange(index, 'name', event.target.value)}
                           placeholder={t('customer.form.itemName')}
@@ -490,10 +511,11 @@ export default function CustomerDashboard() {
                         />
                       </div>
                       <div className="md:col-span-1 space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
+                        <label htmlFor={`cd-itemQty-${index}`} className="text-sm font-medium text-gray-700">
                           {t('customer.form.quantity')}
                         </label>
                         <Input
+                          id={`cd-itemQty-${index}`}
                           type="number"
                           min={1}
                           value={item.quantity}
@@ -597,6 +619,8 @@ export default function CustomerDashboard() {
         )}
       </section>
 
+      <MoversCoinTeaser showBalance />
+
       <section>
         <Card className="border border-orange-100 bg-white">
           <CardHeader>
@@ -663,7 +687,7 @@ export default function CustomerDashboard() {
                                 <div className="text-gray-700">
                                   {t('customer.jobs.driverQuote', {
                                     id: String(quote.driverId),
-                                    amount: quote.quotedRate.toFixed(2),
+                                    amount: formatJPY(quote.quotedRate),
                                   })}
                                 </div>
                                 <div className="flex flex-wrap gap-2">

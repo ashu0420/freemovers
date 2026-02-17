@@ -56,6 +56,7 @@ export function AddItemsForm({ onNext, onBack }: AddItemsFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <p className="text-sm text-muted-foreground">{t('move.addItemHint')}</p>
         <div>
           {fields.map((field, index) => (
             <div key={field.id} className="flex items-end gap-4 mb-4 p-4 border rounded-lg">
@@ -90,6 +91,7 @@ export function AddItemsForm({ onNext, onBack }: AddItemsFormProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => remove(index)}
+                aria-label={t('newMove.removeItem')}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

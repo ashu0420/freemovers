@@ -121,7 +121,7 @@ export function MoveDetailsForm({ onNext }: MoveDetailsFormProps) {
                     <Input
                       {...field}
                       value={field.value || ''}
-                      placeholder="1000001"
+                      placeholder={t('move.homeSizeLabel')}
                       onChange={(event) => field.onChange(normalizePostalCode(event.target.value))}
                     />
                     <Button
@@ -149,7 +149,7 @@ export function MoveDetailsForm({ onNext }: MoveDetailsFormProps) {
                     <Input
                       {...field}
                       value={field.value || ''}
-                      placeholder="1000001"
+                      placeholder={t('move.homeSizeLabel')}
                       onChange={(event) => field.onChange(normalizePostalCode(event.target.value))}
                     />
                     <Button
@@ -179,7 +179,7 @@ export function MoveDetailsForm({ onNext }: MoveDetailsFormProps) {
                 <LocationInput
                   value={field.value}
                   onChange={field.onChange}
-                  placeholder={t('customer.form.pickup')}
+                  placeholder={t('move.areaExample')}
                 />
               </FormControl>
               <FormMessage />
@@ -196,7 +196,7 @@ export function MoveDetailsForm({ onNext }: MoveDetailsFormProps) {
                 <LocationInput
                   value={field.value}
                   onChange={field.onChange}
-                  placeholder={t('customer.form.dropoff')}
+                  placeholder={t('move.areaExample')}
                 />
               </FormControl>
               <FormMessage />

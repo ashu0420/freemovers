@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Crosshair, MapPinned, Search, X } from 'lucide-react';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { useFeatureFlag } from '@/components/providers/FeatureFlagsProvider';
 import { cn } from '@/lib/utils';
 
 type LocationOption = {
@@ -36,6 +37,7 @@ type LocationInputProps = {
   inputClassName?: string;
   buttonClassName?: string;
   allowCurrentLocation?: boolean;
+  id?: string;
 };
 
 export function LocationInput({
@@ -46,8 +48,10 @@ export function LocationInput({
   inputClassName,
   buttonClassName,
   allowCurrentLocation = true,
+  id,
 }: LocationInputProps) {
   const { t, locale } = useI18n();
+  const mapPickerEnabled = useFeatureFlag('map_picker');
   const [query, setQuery] = useState(value);
   const [options, setOptions] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -478,6 +482,7 @@ export function LocationInput({
       <div className="relative">
         <input
           ref={inputRef}
+          id={id}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -506,22 +511,24 @@ export function LocationInput({
         />
         {allowCurrentLocation && (
           <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setMapOpen(true);
-                setMapSearchQuery(query);
-                setMapSearchResults([]);
-                setMapSearchTouched(false);
-              }}
-              className={cn(
-                'rounded-full border border-orange-200 bg-white p-1 text-orange-600 transition hover:bg-orange-50',
-                buttonClassName
-              )}
-              aria-label={t('location.openMap')}
-            >
-              <MapPinned className="h-4 w-4" />
-            </button>
+            {mapPickerEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMapOpen(true);
+                  setMapSearchQuery(query);
+                  setMapSearchResults([]);
+                  setMapSearchTouched(false);
+                }}
+                className={cn(
+                  'rounded-full border border-orange-200 bg-white p-1 text-orange-600 transition hover:bg-orange-50',
+                  buttonClassName
+                )}
+                aria-label={t('location.openMap')}
+              >
+                <MapPinned className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={handleCurrentLocation}

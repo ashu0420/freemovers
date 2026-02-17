@@ -7,6 +7,7 @@ import { Calendar, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { formatJPY } from '@/lib/utils';
 
 type Move = {
   id: number;
@@ -26,6 +27,7 @@ export default function CustomerJobsPage() {
     Record<number, { driverId: number; quotedRate: number; createdAt: string }[]>
   >({});
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -33,6 +35,9 @@ export default function CustomerJobsPage() {
       try {
         setIsLoading(true);
         const response = await fetch(`/api/customer/moves?customer_id=${user.id}`);
+        if (!response.ok) {
+          throw new Error('fetch failed');
+        }
         const data = await response.json();
         const loadedMoves = Array.isArray(data?.moves) ? data.moves : [];
         setMoves(loadedMoves);
@@ -49,9 +54,11 @@ export default function CustomerJobsPage() {
           })
         );
         setQuotesByMove(Object.fromEntries(quoteEntries));
+        setError(false);
       } catch {
         setMoves([]);
         setQuotesByMove({});
+        setError(true);
       } finally {
         setIsLoading(false);
       }
@@ -114,6 +121,19 @@ export default function CustomerJobsPage() {
       </div>
 
       {isLoading ? (
+        <div className="text-sm text-muted-foreground">{t('jobs.loading')}</div>
+      ) : error ? (
+        <Card className="border border-dashed">
+          <CardHeader>
+            <CardTitle>{t('common.networkError')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              {t('common.retry')}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : moves.length === 0 ? (
         <div className="text-sm text-muted-foreground">{t('jobs.loading')}</div>
       ) : moves.length === 0 ? (
         <Card className="border border-dashed">
@@ -185,7 +205,7 @@ export default function CustomerJobsPage() {
                           <div className="text-gray-700">
                             {t('customer.jobs.driverQuote', {
                               id: String(quote.driverId),
-                              amount: quote.quotedRate.toFixed(2),
+                              amount: formatJPY(quote.quotedRate),
                             })}
                           </div>
                           <Button size="sm" onClick={() => handleAcceptQuote(move.id, quote.driverId)}>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Zap, Lock, ShieldCheck, Headset } from 'lucide-react';
 import { useI18n } from '@/components/providers/I18nProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { MoversCoinTeaser } from '@/components/shared/MoversCoinTeaser';
 
 export default function Home() {
   const { t } = useI18n();
@@ -59,26 +60,35 @@ export default function Home() {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href={portalHref}
-                  className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:bg-orange-700"
+                  href="/request-quote"
+                  className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-orange-200 transition hover:bg-orange-700"
                 >
-                  {user ? t('public.portal') : t('public.hero.cta')}
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  引越し見積もりを依頼
+                  <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
                 {!user && (
                   <Link
-                    href="/request-quote"
-                    className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-orange-50 px-6 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+                    href="/signup"
+                    className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-6 py-4 text-base font-semibold text-orange-700 transition hover:bg-orange-50"
                   >
-                    {t('guest.quickCta')}
+                    新規登録
                   </Link>
                 )}
                 {!user && (
                   <Link
-                    href="/signup"
-                    className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-6 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-50"
+                    href="/login"
+                    className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-orange-50 px-6 py-4 text-base font-semibold text-orange-700 transition hover:bg-orange-100"
                   >
-                    {t('public.signUp')}
+                    ログイン
+                  </Link>
+                )}
+                {user && (
+                  <Link
+                    href={portalHref}
+                    className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-6 py-4 text-base font-semibold text-orange-700 transition hover:bg-orange-50"
+                  >
+                    {t('public.portal')}
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 )}
               </div>
@@ -184,6 +194,11 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* MoversCoin teaser */}
+      <section className="mx-auto max-w-7xl px-6 pb-16">
+        <MoversCoinTeaser showCta={!user} />
       </section>
 
       {/* CTA Section */}

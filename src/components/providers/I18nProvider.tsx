@@ -29,6 +29,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setLocaleState(browser.startsWith('en') ? 'en' : 'ja');
   }, []);
 
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale;
+    }
+  }, [locale]);
+
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     localStorage.setItem('locale', next);

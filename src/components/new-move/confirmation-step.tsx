@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/providers/I18nProvider';
+import { formatJPY } from '@/lib/utils';
 
 interface ConfirmationStepProps {
   formData: {
@@ -26,8 +27,15 @@ export function ConfirmationStep({
   isSubmitting = false,
 }: ConfirmationStepProps) {
   const { t } = useI18n();
+
+  const itemCount =
+    (formData.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0) || 1;
+  const estimatedTotal = 8000 + itemCount * 2500;
+
   return (
     <div className="space-y-8">
+      <p className="text-sm text-muted-foreground">{t('move.reviewSummary')}</p>
+
       <div>
         <h3 className="text-lg font-medium">{t('newMove.moveDetails')}</h3>
         <div className="mt-2 border-t border-b border-gray-200 divide-y divide-gray-200">
@@ -79,6 +87,14 @@ export function ConfirmationStep({
               <dd className="text-gray-900">x{item.quantity}</dd>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-medium">{t('move.estimatedTotal')}</h3>
+        <div className="mt-2 border-t border-b border-gray-200 py-3 flex justify-between text-sm font-medium">
+          <dt className="text-gray-500">{t('move.estimatedTotal')}</dt>
+          <dd className="text-gray-900 text-right">{formatJPY(estimatedTotal)}</dd>
         </div>
       </div>
 
