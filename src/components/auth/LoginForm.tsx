@@ -71,12 +71,12 @@ export function LoginForm({ onSuccess, defaultUserType = 'customer' }: LoginForm
     try {
       setIsLoading(true);
       await login(values.email, values.password, values.userType);
-      toast.success('Logged in successfully!');
+      toast.success(t('auth.login.success'));
       onSuccess?.();
       router.push(`/${values.userType}/dashboard`);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Login failed. Please try again.';
+        error instanceof Error ? error.message : t('auth.login.failure');
       toast.error(message);
     } finally {
       setIsLoading(false);

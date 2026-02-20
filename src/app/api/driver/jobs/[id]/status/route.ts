@@ -1,5 +1,5 @@
-import { jsonResponse } from '@/lib/server/http';
-import { updateMoveStatus } from '@/lib/server/db';
+import { HttpError, jsonResponse, readJson, requireUser } from '@/lib/server/http';
+import { getMoveById, updateMoveStatus } from '@/lib/server/db';
 
 export const runtime = 'nodejs';
 
@@ -13,17 +13,38 @@ export async function POST(
     return jsonResponse({ detail: 'Invalid job id.' }, 400);
   }
 
-  const body = await request.json().catch(() => null) as { status?: string } | null;
-  const status = body?.status;
-  const allowed = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-  if (!status || !allowed.includes(status)) {
-    return jsonResponse({ detail: 'Invalid status.' }, 400);
-  }
+  try {
+    const session = await requireUser(request);
+    if (session.role !== 'driver') {
+      return jsonResponse({ error: 'forbidden' }, 403);
+    }
 
-  const updated = updateMoveStatus(moveId, status as 'scheduled' | 'in_progress' | 'completed' | 'cancelled');
-  if (!updated) {
-    return jsonResponse({ detail: 'Job not found.' }, 404);
-  }
+    const move = getMoveById(moveId);
+    if (!move) {
+      return jsonResponse({ detail: 'Job not found.' }, 404);
+    }
+    if (move.driver_id !== session.userId) {
+      return jsonResponse({ error: 'forbidden' }, 403);
+    }
 
-  return jsonResponse({ ok: true });
+    const body = await readJson<{ status?: string }>(request);
+    if (!body) {
+      return jsonResponse({ detail: 'Invalid request body.' }, 400);
+    }
+    const status = body.status;
+    const allowed = ['scheduled', 'in_progress', 'completed', 'cancelled'];
+    if (!status || !allowed.includes(status)) {
+      return jsonResponse({ detail: 'Invalid status.' }, 400);
+    }
+
+    const updated = updateMoveStatus(moveId, status as 'scheduled' | 'in_progress' | 'completed' | 'cancelled');
+    if (!updated) {
+      return jsonResponse({ detail: 'Job not found.' }, 404);
+    }
+
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    if (e instanceof HttpError) return jsonResponse({ error: e.message }, e.status);
+    throw e;
+  }
 }

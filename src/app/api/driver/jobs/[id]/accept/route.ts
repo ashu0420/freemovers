@@ -1,4 +1,4 @@
-import { jsonResponse } from '@/lib/server/http';
+import { HttpError, jsonResponse, readJson, requireUser } from '@/lib/server/http';
 import { createOrUpdateQuote, findUserById, getMoveById } from '@/lib/server/db';
 import { sendCustomerMoveNotification } from '@/lib/server/notifications';
 
@@ -10,30 +10,39 @@ export async function POST(
 ) {
   const { id } = await params;
   const moveId = Number(id);
-  console.log('moveId:', moveId);
   if (!Number.isFinite(moveId)) {
     return jsonResponse({ detail: 'Invalid job id.' }, 400);
   }
 
-  const body = await request.json().catch(() => null) as {
-    driver_id?: number;
-    quoted_rate?: number;
-  } | null;
-  const driverId = body?.driver_id;
-  const quotedRate = body?.quoted_rate;
+  try {
+    const session = await requireUser(request);
+    if (session.role !== 'driver') {
+      return jsonResponse({ error: 'forbidden' }, 403);
+    }
+    // driver_id is DERIVED from the authenticated session, never the request body.
+    const driverId = session.userId;
 
-  if (!driverId || !Number.isFinite(driverId)) {
-    return jsonResponse({ detail: 'driver_id is required.' }, 400);
-  }
+    const body = await readJson<{ quoted_rate?: number }>(request);
+    if (!body) {
+      return jsonResponse({ detail: 'Invalid request body.' }, 400);
+    }
+    const quotedRate = body.quoted_rate;
 
-  if (!quotedRate || !Number.isFinite(quotedRate) || quotedRate <= 0) {
-    return jsonResponse({ detail: 'quoted_rate must be a positive number.' }, 400);
-  }
+    if (!quotedRate || !Number.isFinite(quotedRate) || quotedRate <= 0) {
+      return jsonResponse({ detail: 'quoted_rate must be a positive number.' }, 400);
+    }
 
-  createOrUpdateQuote(moveId, driverId, quotedRate);
+    const move = getMoveById(moveId);
+    if (!move) {
+      return jsonResponse({ detail: 'Job not found.' }, 404);
+    }
+    // Optionally ensure the move is still in an acceptable state (open to quotes).
+    if (move.status !== 'pending' || move.driver_id !== null) {
+      return jsonResponse({ detail: 'This move is no longer accepting quotes.' }, 400);
+    }
 
-  const move = getMoveById(moveId);
-  if (move) {
+    createOrUpdateQuote(moveId, driverId, quotedRate);
+
     const customer = findUserById(move.customer_id);
     await sendCustomerMoveNotification({
       customer,
@@ -42,6 +51,9 @@ export async function POST(
       moveDate: move.move_date,
       quoteAmount: quotedRate,
     });
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    if (e instanceof HttpError) return jsonResponse({ error: e.message }, e.status);
+    throw e;
   }
-  return jsonResponse({ ok: true });
 }

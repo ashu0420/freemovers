@@ -3,7 +3,7 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || '/api').replace(/\
 export interface LoginRequest {
   email: string;
   password: string;
-  user_type: 'customer' | 'driver';
+  user_type: 'customer' | 'driver' | 'admin';
 }
 
 export interface RegisterRequest extends LoginRequest {
@@ -22,7 +22,7 @@ export interface AuthResponse {
     email: string;
     first_name: string;
     last_name: string;
-    user_type: 'customer' | 'driver';
+    user_type: 'customer' | 'driver' | 'admin';
     phone_number: string;
     phone_verified?: boolean;
     preferred_locale?: 'en' | 'ja';

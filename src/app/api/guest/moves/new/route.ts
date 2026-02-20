@@ -3,7 +3,7 @@ import { getOrCreateGuestCustomer } from '@/lib/server/guest';
 import { jsonResponse, readJson } from '@/lib/server/http';
 import { sendCustomerMoveNotification } from '@/lib/server/notifications';
 
-type MoveItem = { name: string; quantity: number };
+type MoveItem = { id?: string | number; name: string; qty?: number; quantity?: number; weight?: number };
 
 type CreateGuestMoveBody = {
   first_name?: string;
@@ -22,24 +22,60 @@ type CreateGuestMoveBody = {
 
 export const runtime = 'nodejs';
 
+const ALLOWED_SERVICE_AREAS = ['tokyo', 'osaka', 'kyoto', 'nagoya', 'yokohama', 'fukuoka', 'sapporo'];
+const ALLOWED_PAYMENT_PREFERENCES = ['card', 'cash', 'bank_transfer', 'line_pay'];
+
+function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  const d = new Date(value);
+  return !Number.isNaN(d.getTime()) && value === d.toISOString();
+}
+
+function validateItems(items: unknown): items is MoveItem[] {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.every(
+    (it) =>
+      it &&
+      typeof it === 'object' &&
+      typeof (it as MoveItem).name === 'string' &&
+      (it as MoveItem).name.length > 0 &&
+      Number.isFinite(Number((it as MoveItem).qty ?? (it as MoveItem).quantity ?? 0)) &&
+      Number.isFinite(Number((it as MoveItem).weight ?? 0))
+  );
+}
+
 export async function POST(request: Request) {
   const body = await readJson<CreateGuestMoveBody>(request);
-
-  if (
-    !body?.phone_number ||
-    !body?.pickup_address ||
-    !body?.dropoff_address ||
-    !body?.move_date ||
-    !body?.items?.length
-  ) {
-    return jsonResponse({ detail: 'All required fields must be filled.' }, 400);
+  if (!body) {
+    return jsonResponse({ detail: 'Invalid request body.' }, 400);
   }
 
-  const guest = getOrCreateGuestCustomer({
+  if (!body.phone_number || !body.pickup_address || !body.dropoff_address || !body.move_date) {
+    return jsonResponse({ detail: 'phone_number, pickup_address, dropoff_address and move_date are required.' }, 400);
+  }
+  if (!isValidIsoDate(body.move_date)) {
+    return jsonResponse({ detail: 'move_date must be a valid ISO date string.' }, 400);
+  }
+  if (body.service_area && !ALLOWED_SERVICE_AREAS.includes(body.service_area)) {
+    return jsonResponse({ detail: 'Invalid service_area.' }, 400);
+  }
+  if (body.payment_preference && !ALLOWED_PAYMENT_PREFERENCES.includes(body.payment_preference)) {
+    return jsonResponse({ detail: 'Invalid payment_preference.' }, 400);
+  }
+  if (!validateItems(body.items)) {
+    return jsonResponse({ detail: 'items must be a non-empty array of { id?, name, qty?, weight? } objects.' }, 400);
+  }
+
+  const guest = await getOrCreateGuestCustomer({
     firstName: body.first_name,
     lastName: body.last_name,
     phoneNumber: body.phone_number,
   });
+
+  const normalizedItems = body.items.map((it) => ({
+    name: it.name,
+    quantity: Number(it.qty ?? it.quantity ?? 1),
+  }));
 
   const move = createMove({
     customer_id: guest.id,
@@ -52,7 +88,7 @@ export async function POST(request: Request) {
     country_code: body.country_code || 'JP',
     service_area: body.service_area || 'tokyo',
     payment_preference: body.payment_preference || 'card',
-    items: body.items,
+    items: normalizedItems,
     estimated_earnings: 0,
     status: 'pending',
   });

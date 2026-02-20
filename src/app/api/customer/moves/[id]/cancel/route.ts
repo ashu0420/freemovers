@@ -1,11 +1,7 @@
+import { HttpError, jsonResponse, requireUser } from '@/lib/server/http';
 import { getMoveById, updateMoveStatus } from '@/lib/server/db';
-import { jsonResponse, readJson } from '@/lib/server/http';
 
 export const runtime = 'nodejs';
-
-type CancelBody = {
-  customer_id?: number;
-};
 
 export async function POST(
   request: Request,
@@ -17,25 +13,31 @@ export async function POST(
     return jsonResponse({ detail: 'Invalid move id.' }, 400);
   }
 
-  const body = await readJson<CancelBody>(request).catch(() => null);
-  const customerId = body?.customer_id;
-  if (!customerId || !Number.isFinite(customerId)) {
-    return jsonResponse({ detail: 'customer_id is required.' }, 400);
-  }
+  try {
+    const session = await requireUser(request);
+    if (session.role !== 'customer') {
+      return jsonResponse({ error: 'forbidden' }, 403);
+    }
+    // Authorization is derived from the session, never a client-supplied customer_id.
+    const customerId = session.userId;
 
-  const move = getMoveById(moveId);
-  if (!move || move.customer_id !== customerId) {
-    return jsonResponse({ detail: 'Move not found.' }, 404);
-  }
+    const move = getMoveById(moveId);
+    if (!move || move.customer_id !== customerId) {
+      return jsonResponse({ detail: 'Move not found.' }, 404);
+    }
 
-  if (move.status === 'completed') {
-    return jsonResponse({ detail: 'Completed move cannot be cancelled.' }, 400);
-  }
+    if (move.status === 'completed') {
+      return jsonResponse({ detail: 'Completed move cannot be cancelled.' }, 400);
+    }
 
-  const updated = updateMoveStatus(moveId, 'cancelled');
-  if (!updated) {
-    return jsonResponse({ detail: 'Unable to cancel move.' }, 400);
-  }
+    const updated = updateMoveStatus(moveId, 'cancelled');
+    if (!updated) {
+      return jsonResponse({ detail: 'Unable to cancel move.' }, 400);
+    }
 
-  return jsonResponse({ ok: true });
+    return jsonResponse({ ok: true });
+  } catch (e) {
+    if (e instanceof HttpError) return jsonResponse({ error: e.message }, e.status);
+    throw e;
+  }
 }

@@ -103,16 +103,18 @@ export function ProfileForm() {
     <form className="space-y-6" onSubmit={handleSubmit}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
+          <label htmlFor="profile-firstName" className="text-sm font-medium text-gray-700">{t('profile.firstName')}</label>
           <Input
+            id="profile-firstName"
             value={form.first_name}
             onChange={(event) => setForm((prev) => ({ ...prev, first_name: event.target.value }))}
             placeholder={t('profile.firstNamePlaceholder')}
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
+          <label htmlFor="profile-lastName" className="text-sm font-medium text-gray-700">{t('profile.lastName')}</label>
           <Input
+            id="profile-lastName"
             value={form.last_name}
             onChange={(event) => setForm((prev) => ({ ...prev, last_name: event.target.value }))}
             placeholder={t('profile.lastNamePlaceholder')}
@@ -121,8 +123,9 @@ export function ProfileForm() {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.locale')}</label>
+          <label htmlFor="profile-locale" className="text-sm font-medium text-gray-700">{t('profile.locale')}</label>
           <select
+            id="profile-locale"
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={form.preferred_locale}
             onChange={(event) =>
@@ -137,8 +140,9 @@ export function ProfileForm() {
           </select>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.notification')}</label>
+          <label htmlFor="profile-notification" className="text-sm font-medium text-gray-700">{t('profile.notification')}</label>
           <select
+            id="profile-notification"
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={form.preferred_notification_channel}
             onChange={(event) =>
@@ -161,8 +165,9 @@ export function ProfileForm() {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.lineUserId')}</label>
+          <label htmlFor="profile-lineUserId" className="text-sm font-medium text-gray-700">{t('profile.lineUserId')}</label>
           <Input
+            id="profile-lineUserId"
             value={form.line_user_id}
             onChange={(event) => setForm((prev) => ({ ...prev, line_user_id: event.target.value }))}
             placeholder={t('profile.lineUserIdPlaceholder')}
@@ -195,16 +200,17 @@ export function ProfileForm() {
       )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.phone')}</label>
+          <label htmlFor="profile-phone" className="text-sm font-medium text-gray-700">{t('profile.phone')}</label>
           <Input
+            id="profile-phone"
             value={form.phone_number}
             onChange={(event) => setForm((prev) => ({ ...prev, phone_number: event.target.value }))}
             placeholder={t('profile.phonePlaceholder')}
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">{t('profile.email')}</label>
-          <Input value={form.email} disabled />
+          <label htmlFor="profile-email" className="text-sm font-medium text-gray-700">{t('profile.email')}</label>
+          <Input id="profile-email" value={form.email} disabled />
         </div>
       </div>
       <PhoneVerificationCard

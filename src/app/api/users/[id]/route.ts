@@ -1,8 +1,10 @@
-import { jsonResponse, readJson } from '@/lib/server/http';
+import { HttpError, jsonResponse, readJson, requireUser } from '@/lib/server/http';
 import { findUserById, updateUser } from '@/lib/server/db';
 
 export const runtime = 'nodejs';
 
+// Allowed self-service update fields. user_type/role are intentionally excluded
+// so a non-admin can never escalate privileges via mass-assignment.
 type UpdateBody = {
   first_name?: string;
   last_name?: string;
@@ -13,14 +15,34 @@ type UpdateBody = {
   operating_regions?: string[];
 };
 
+const ALLOWED_UPDATE_KEYS: Array<keyof UpdateBody> = [
+  'first_name',
+  'last_name',
+  'phone_number',
+  'preferred_locale',
+  'preferred_notification_channel',
+  'line_user_id',
+  'operating_regions',
+];
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const userId = Number(id);
   if (!Number.isFinite(userId)) {
     return jsonResponse({ detail: 'Invalid user id.' }, 400);
+  }
+
+  try {
+    const session = await requireUser(request);
+    if (session.userId !== userId && session.role !== 'admin') {
+      return jsonResponse({ detail: 'forbidden' }, 403);
+    }
+  } catch (e) {
+    if (e instanceof HttpError) return jsonResponse({ error: e.message }, e.status);
+    throw e;
   }
 
   const user = findUserById(userId);
@@ -60,8 +82,30 @@ export async function PUT(
     return jsonResponse({ detail: 'Invalid user id.' }, 400);
   }
 
+  try {
+    const session = await requireUser(request);
+    if (session.userId !== userId && session.role !== 'admin') {
+      return jsonResponse({ error: 'forbidden' }, 403);
+    }
+  } catch (e) {
+    if (e instanceof HttpError) return jsonResponse({ error: e.message }, e.status);
+    throw e;
+  }
+
   const body = await readJson<UpdateBody>(request);
-  const updated = updateUser(userId, body);
+  if (!body) {
+    return jsonResponse({ detail: 'Invalid request body.' }, 400);
+  }
+
+  // Whitelist fields; drop anything not allowed (e.g. user_type/role) unless admin.
+  const safeUpdates: UpdateBody = {};
+  for (const key of ALLOWED_UPDATE_KEYS) {
+    if (key in body) {
+      (safeUpdates as Record<string, unknown>)[key] = body[key];
+    }
+  }
+
+  const updated = updateUser(userId, safeUpdates);
   if (!updated) {
     return jsonResponse({ detail: 'User not found.' }, 404);
   }
