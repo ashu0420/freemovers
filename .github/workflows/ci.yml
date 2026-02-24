@@ -1,0 +1,39 @@
+# CI gates for freemovers
+# This workflow validates every change pushed to `main` and every pull request:
+#   - install dependencies reproducibly with `npm ci`
+#   - lint (next lint)
+#   - type-check with the TypeScript compiler (no emit)
+#   - production build (`next build`)
+# The `env:` block below supplies harmless dev defaults so the build does not
+# fail on missing environment variables. No real secrets are included here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Harmless dev defaults only. Never put real secrets here.
+      NEXT_PUBLIC_DEFAULT_LOCALE: ja
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+      WHATSAPP_PHONE_NUMBER_ID: ""
+      WHATSAPP_ACCESS_TOKEN: ""
+      WHATSAPP_TEMPLATE_NAME: ""
+      WHATSAPP_TEMPLATE_NAME_MOVE_REQUEST: ""
+      WHATSAPP_TEMPLATE_LANG: en_US
+      LINE_CHANNEL_ACCESS_TOKEN: ""
+      SESSION_SECRET: ci-dev-only-insecure-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build
